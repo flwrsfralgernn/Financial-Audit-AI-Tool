@@ -100,12 +100,12 @@ def safe_parse_flags(text):
             f["Reason"] = ""
     return flags
 
-# === Evaluate only first 3 trips ===
+
 results = []
 
-report_keys = df["Report Key"].unique()[:3]  # first 3 unique Report Keys
+report_keys = df["Report Key"].unique()[:]
 
-for report_key in tqdm(report_keys, desc="🔍 Evaluating First 3 Trips"):
+for report_key in tqdm(report_keys, desc="🔍 Evaluating All Trips"):
     trip_df = df[df["Report Key"] == report_key]
     base = trip_df.iloc[0]
     trip_context = {
@@ -177,7 +177,7 @@ Your output MUST be a valid JSON array where each element includes "Flagged" and
 # === Save Final Output ===
 if results:
     final_df = pd.concat(results)
-    output_file = current_dir / "flagged_expenses_kb_bedrock_sample.xlsx"
+    output_file = current_dir.parent / "flagged_expenses_kb_bedrock_sample.xlsx"
     final_df.to_excel(output_file, index=False)
     print(f"✅ Done. Output saved to {output_file}")
 else:

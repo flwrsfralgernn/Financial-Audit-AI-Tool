@@ -1,8 +1,109 @@
-# === Evaluate Trips ===
+import boto3
+import json
+import pandas as pd
+from pathlib import Path
+from datetime import datetime, time
+from botocore.exceptions import ClientError
+from tqdm import tqdm
+import re
+
+# === AWS Setup ===
+session = boto3.Session(profile_name="calpoly", region_name="us-west-2")
+bedrock_agent = session.client("bedrock-agent-runtime")
+knowledge_base_id = "DB1EZE0UT6"
+
+# === Load & Clean Excel ===
+current_dir = Path(__file__).resolve().parent
+file_path = current_dir.parent / "FY2024_Q2_Continous_Auditing_Procedures.xlsx"
+df = pd.read_excel(file_path, skiprows=8)
+
+# Ensure column names
+df.columns = [col if pd.notna(col) and str(col).strip() else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+
+# Convert dates
+for col in ["Travel Start Date", "Travel End Date", "Transaction Date"]:
+    if col in df.columns:
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+
+if "Report Key" not in df.columns:
+    raise ValueError("Missing 'Report Key' column.")
+
+# Add output columns
+df["Flagged"] = ""
+df["Reason"] = ""
+
+# === JSON-safe converter ===
+def make_json_safe(obj):
+    if isinstance(obj, (datetime, pd.Timestamp)):
+        return obj.isoformat()
+    if isinstance(obj, time):
+        return obj.strftime("%H:%M:%S")
+    return obj
+
+# === AI Call Wrapper ===
+def call_knowledge_base(prompt, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = bedrock_agent.retrieve_and_generate(
+                input={"text": prompt},
+                retrieveAndGenerateConfiguration={
+                    "type": "KNOWLEDGE_BASE",
+                    "knowledgeBaseConfiguration": {
+                        "knowledgeBaseId": knowledge_base_id,
+                        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
+                        'retrievalConfiguration': {
+                            'vectorSearchConfiguration': {
+                                'numberOfResults': 1
+                            }
+                        },
+                    }
+                }
+            )
+            return response['output']['text']
+        except ClientError as e:
+            if attempt < max_retries - 1:
+                continue
+            raise e
+
+# === Helpers for robust parsing ===
+def extract_json_array(text):
+    pattern = re.compile(r'\[\s*{.*?}\s*\]', re.DOTALL)
+    match = pattern.search(text)
+    if not match:
+        return None
+    candidate = match.group(0)
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+
+def normalize_flag(value):
+    if not isinstance(value, str):
+        return "No"
+    val = value.strip().lower()
+    if val in ['yes', 'true', '1']:
+        return "Yes"
+    return "No"
+
+def safe_parse_flags(text):
+    text_strip = text.strip()
+    # Auto-fix missing closing bracket for JSON array
+    if text_strip.startswith('[') and not text_strip.endswith(']'):
+        text_strip += ']'
+    flags = extract_json_array(text_strip)
+    if flags is None:
+        return None
+    # Normalize flags and ensure 'Reason' key
+    for f in flags:
+        f["Flagged"] = normalize_flag(f.get("Flagged", "No"))
+        if "Reason" not in f:
+            f["Reason"] = ""
+    return flags
+
+# === Evaluate only first 3 trips ===
 results = []
 
-# Get unique Report Keys (preserving original order)
-report_keys = df["Report Key"].unique()[:3]  # first 3 keys only
+report_keys = df["Report Key"].unique()[:3]  # first 3 unique Report Keys
 
 for report_key in tqdm(report_keys, desc="🔍 Evaluating First 3 Trips"):
     trip_df = df[df["Report Key"] == report_key]
@@ -76,7 +177,7 @@ Your output MUST be a valid JSON array where each element includes "Flagged" and
 # === Save Final Output ===
 if results:
     final_df = pd.concat(results)
-    output_file = current_dir.parent / "flagged_expenses_kb_bedrock_sample.xlsx"
+    output_file = current_dir / "flagged_expenses_kb_bedrock_sample.xlsx"
     final_df.to_excel(output_file, index=False)
     print(f"✅ Done. Output saved to {output_file}")
 else:
