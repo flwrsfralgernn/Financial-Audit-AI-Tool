@@ -95,7 +95,7 @@ def clean_data_sheet(df_raw):
     ]
     df1 = df1[keep_columns]
 
-    return df, df1
+    return df_raw, df1
 
 
 def format_employee_expenses_as_csv(employee_df, max_rows=50):
@@ -354,30 +354,104 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
 
 
 
-xls = pd.ExcelFile("data/FY2024_Q2_Continous_Auditing_Procedures.xlsx")
-print("📄 Sheets in the file:", xls.sheet_names)
+# xls = pd.ExcelFile("data/FY2024_Q2_Continous_Auditing_Procedures.xlsx")
+# print("📄 Sheets in the file:", xls.sheet_names)
+#
+# # Load a specific sheet (e.g., the first one)
+# df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+# df_original, df_clean = clean_data_sheet(df)
+#
+# groups = df_clean.groupby(['Employee ID', 'Report Key'])
+#
+# session = Session(
+#     aws_access_key_id=aws_access_key_id,
+#     aws_secret_access_key=aws_secret_access_key,
+#     aws_session_token=aws_session_token,
+#     region_name="us-west-2"
+# )
+#
+# bedrock_runtime = session.client("bedrock-runtime")
+#
+# violation_rows, exception_rows, results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
+# # Step 1: Flag the original DataFrame
+# df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+#
+# # Step 2: Save to Excel
+# save_to_excel_with_formatting(df_flagged)
 
-# Load a specific sheet (e.g., the first one)
-df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-df_original, df_clean = clean_data_sheet(df)
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import pandas as pd
+from boto3 import Session
+import os
 
-groups = df_clean.groupby(['Employee ID', 'Report Key'])
-
-session = Session(
-    aws_access_key_id=aws_access_key_id,
-    aws_secret_access_key=aws_secret_access_key,
-    aws_session_token=aws_session_token,
-    region_name="us-west-2"
+from main import (
+    clean_data_sheet,
+    run_audit_for_multiple_employees,
+    flag_audit_rows,
+    save_to_excel_with_formatting
 )
+from config import aws_access_key_id, aws_secret_access_key, aws_session_token
 
-bedrock_runtime = session.client("bedrock-runtime")
 
-violation_rows, exception_rows, results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
-# Step 1: Flag the original DataFrame
-df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+class AuditApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Cal Poly Travel Expense Auditor")
+        self.root.geometry("400x200")
 
-# Step 2: Save to Excel
-save_to_excel_with_formatting(df_flagged)
+        self.excel_path = None
+        self.df_original = None
+        self.df_clean = None
+        self.bedrock_runtime = self.init_bedrock_runtime()
+
+        self.import_btn = tk.Button(root, text="📁 Import Excel File", command=self.import_excel, width=30)
+        self.import_btn.pack(pady=20)
+
+        self.generate_btn = tk.Button(root, text="🚀 Generate Reports", command=self.generate_report, state=tk.DISABLED, width=30)
+        self.generate_btn.pack(pady=10)
+
+    def init_bedrock_runtime(self):
+        session = Session(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_session_token=aws_session_token,
+            region_name="us-west-2"
+        )
+        return session.client("bedrock-runtime")
+
+    def import_excel(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+        if file_path:
+            try:
+                xls = pd.ExcelFile(file_path)
+                df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+                self.df_original, self.df_clean = clean_data_sheet(df)
+                self.excel_path = file_path
+                self.generate_btn.config(state=tk.NORMAL)
+                messagebox.showinfo("Success", "Excel file imported successfully!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load Excel file:\n{str(e)}")
+
+    def generate_report(self):
+        try:
+            violation_rows, exception_rows, _ = run_audit_for_multiple_employees(self.df_clean, self.bedrock_runtime)
+            df_flagged = flag_audit_rows(self.df_original, self.df_clean, violation_rows, exception_rows)
+
+            # Save result
+            output_path = os.path.join(os.path.dirname(self.excel_path), "Audited_Expenses.xlsx")
+            save_to_excel_with_formatting(df_flagged, output_path)
+
+            messagebox.showinfo("✅ Done", f"Audit complete! Saved to:\n{output_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error during audit:\n{str(e)}")
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AuditApp(root)
+    root.mainloop()
+
 
 
 
