@@ -8,6 +8,17 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
 from config import *
 
+def load_excel_file(file_path):
+    xls = pd.ExcelFile(file_path)
+    df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+    return clean_data_sheet(df)
+
+def audit_and_flag(df_original, df_clean, bedrock_runtime):
+    violation_rows, exception_rows, _ = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
+    df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+    save_to_excel_with_formatting(df_flagged)
+    return df_flagged
+
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
     """
@@ -434,8 +445,7 @@ class AuditApp:
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
         if file_path:
             try:
-                xls = pd.ExcelFile(file_path)
-                df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+                df = load_excel_file(file_path)
                 self.df_original, self.df_clean = clean_data_sheet(df)
                 self.excel_path = file_path
                 self.generate_btn.config(state=tk.NORMAL)
@@ -445,8 +455,7 @@ class AuditApp:
 
     def generate_report(self):
         try:
-            violation_rows, exception_rows, _ = run_audit_for_multiple_employees(self.df_clean, self.bedrock_runtime)
-            df_flagged = flag_audit_rows(self.df_original, self.df_clean, violation_rows, exception_rows)
+            df_flagged = audit_and_flag(self.df_original, self.df_clean, self.bedrock_runtime)
 
             messagebox.showinfo("✅ Done")
         except Exception as e:
