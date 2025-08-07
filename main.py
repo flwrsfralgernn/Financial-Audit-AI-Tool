@@ -228,8 +228,8 @@ Example:
 def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     """
     Processes a random sample of `group_count` employee-report groups.
+    Returns only the audited rows flagged and saved to Excel.
     """
-
 
     os.makedirs("audit_reports", exist_ok=True)
 
@@ -241,8 +241,12 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     all_violation_rows = []
     all_exception_rows = []
 
+    # Create empty DataFrame to collect only audited rows
+    audited_rows_df = pd.DataFrame()
+
     for employee_id, report_key in sampled_keys:
         df_emp = groups.get_group((employee_id, report_key))
+        audited_rows_df = pd.concat([audited_rows_df, df_emp], ignore_index=True)
 
         print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
 
@@ -263,17 +267,19 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
         all_violation_rows.extend(violation_rows)
         all_exception_rows.extend(exception_rows)
 
-        df_flagged = flag_audit_rows(df_clean.copy(), df_clean, all_violation_rows, all_exception_rows)
-        excel_path = os.path.join("audit_reports", "Audited_Expenses.xlsx")
-        save_to_excel_with_formatting(df_flagged, excel_path)
-
         results.append({
             "employee_id": employee_id,
             "report_key": report_key,
             "response": full_response
         })
 
+    # Now flag and save only audited rows
+    df_flagged = flag_audit_rows(audited_rows_df.copy(), audited_rows_df, all_violation_rows, all_exception_rows)
+    excel_path = os.path.join("audit_reports", "Audited_Expenses.xlsx")
+    save_to_excel_with_formatting(df_flagged, excel_path)
+
     return all_violation_rows, all_exception_rows, results
+
 
 
 def extract_violation_exception_rows(response_text):
