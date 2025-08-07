@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, session
 import pandas as pd
+from ai_cleaner import clean_excel_with_ai
 import os
 from datetime import datetime
 from io import BytesIO

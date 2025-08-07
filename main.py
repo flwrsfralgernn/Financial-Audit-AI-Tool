@@ -1,12 +1,11 @@
 import pandas as pd
-from boto3 import Session
+import boto3
 import json
 import random
 import os
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
-from config import *
 
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
@@ -301,6 +300,84 @@ def extract_violation_exception_rows(response_text):
     return violation_rows, exception_rows
 
 
+def init_bedrock_runtime():
+    """Initialize AWS Bedrock runtime client"""
+    try:
+        # from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
+        
+        # # Check if credentials exist
+        # if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        #     print("AWS credentials not found in config.py")
+        #     return None
+            
+        # session = Session(
+        #     aws_access_key_id=AWS_ACCESS_KEY_ID,
+        #     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        #     aws_session_token=AWS_SESSION_TOKEN,
+        #     region_name=AWS_REGION
+        # )
+        
+        # Test the credentials by creating client
+        client = boto3.client('bedrock-runtime', region_name="us-west-2")
+        return client
+        
+    except Exception as e:
+        print(f"Failed to initialize AWS Bedrock: {e}")
+        print("Please refresh your AWS credentials in config.py")
+        return None
+
+
+def process_excel_file(file_buffer, is_master=True):
+    """
+    Main function to process uploaded Excel files following complete main.py workflow.
+    Uses create_audit_prompt and invoke_claude_model for AI analysis.
+    Returns DataFrame with only "Audit Flag" column added.
+    """
+    try:
+        # Step 1: Read Excel file
+        xls = pd.ExcelFile(file_buffer)
+        df_raw = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+        
+        # Step 2: Clean data using main.py method
+        df_original, df_clean = clean_data_sheet(df_raw)
+        
+        # Step 3: Initialize Bedrock runtime
+        bedrock_runtime = init_bedrock_runtime()
+        
+        if bedrock_runtime:
+            try:
+                # Step 4: Run AI audit using main.py workflow
+                violation_rows, exception_rows, _ = run_audit_for_multiple_employees(
+                    df_clean, bedrock_runtime, group_count=3
+                )
+                
+                # Step 5: Flag audit rows - adds "Audit Flag" column only
+                df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+                
+                return df_flagged
+                
+            except Exception as e:
+                print(f"AI audit failed: {e}")
+                # Return original data with empty audit flag
+                df_original['Audit Flag'] = ''
+                return df_original
+        else:
+            print("AWS credentials not available - returning cleaned data only")
+            # Return original data with empty audit flag
+            df_original['Audit Flag'] = ''
+            return df_original
+            
+    except Exception as e:
+        print(f"Error processing file: {str(e)}")
+        # Fallback: basic Excel read
+        try:
+            df_basic = pd.read_excel(file_buffer)
+            df_basic['Audit Flag'] = ''
+            return df_basic
+        except:
+            raise e
+
+
 def flag_audit_rows(df_original, df_clean, violation_rows, exception_rows):
     """
     Flags rows in df_original based on violation/exception row numbers.
@@ -428,11 +505,12 @@ class AuditApp:
     def import_excel(self):
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
         if file_path:
+            print("file path: " + file_path)
             try:
                 xls = pd.ExcelFile(file_path)
                 df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
                 self.df_original, self.df_clean = clean_data_sheet(df)
-                self.excel_path = file_path
+                self.excel_path = file_patch
                 self.generate_btn.config(state=tk.NORMAL)
                 messagebox.showinfo("Success", "Excel file imported successfully!")
             except Exception as e:
@@ -452,13 +530,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = AuditApp(root)
     root.mainloop()
-
-
-
-
-
-
-
-
-
-
