@@ -19,19 +19,25 @@
     <div class="dashboard">
       <!-- Upload Section -->
       <div class="upload-card">
-        <h2>📁 Upload Excel File</h2>
+        <h2>📁 Upload Excel Files</h2>
         {% if error %}
           <div class="alert error">{{ error }}</div>
         {% endif %}
-        <form action="/clean_excel" method="post" enctype="multipart/form-data">
+        <form action="/clean_excel" method="post" enctype="multipart/form-data" onsubmit="console.log('Form submitting...')">
           <div class="file-upload">
-            <input type="file" name="file" accept=".xlsx,.xls" required id="file-input" />
+            <input type="file" name="files" accept=".xlsx,.xls" multiple required id="file-input" onchange="console.log('Files selected:', this.files.length)" />
             <label for="file-input" class="file-label">
               <span class="upload-icon">📤</span>
-              <span>Drop Excel file here or click to browse</span>
+              <span id="file-status">Drop Excel files here or click to browse multiple files</span>
             </label>
+            <script>
+              document.getElementById('file-input').addEventListener('change', function() {
+                const fileCount = this.files.length;
+                document.getElementById('file-status').textContent = fileCount > 0 ? `${fileCount} file(s) selected` : 'Drop Excel files here or click to browse multiple files';
+              });
+            </script>
           </div>
-          <button type="submit" class="btn-primary">🤖 Process with AI</button>
+          <button type="submit" class="btn-primary" onclick="console.log('Button clicked')">🤖 Process with AI</button>
         </form>
       </div>
 
@@ -67,6 +73,7 @@
         <div class="stats">
           <span class="stat">{{ row_count }} records</span>
           <span class="stat">{{ flagged_count }} flagged</span>
+          {% if file_count %}<span class="stat">{{ file_count }} files combined</span>{% endif %}
         </div>
       </div>
       <div class="table-container">
@@ -74,7 +81,7 @@
         {{ table_html | safe }}
       </div>
       <div class="actions">
-        <a href="/download_cleaned" class="btn-success">💾 Download Clean Excel</a>
+        <a href="/download_cleaned" class="btn-success">💾 Download Master Excel File</a>
       </div>
     </div>
     {% endif %}
