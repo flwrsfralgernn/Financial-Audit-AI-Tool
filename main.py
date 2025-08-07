@@ -3,7 +3,6 @@ from boto3 import Session
 import json
 import random
 import os
-from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
@@ -157,7 +156,7 @@ Example:
 
 ### Policy Compliance Rules (Violations and Exceptions):
 
-🚫 VIOLATIONS:
+🚫 GENERAL VIOLATIONS:
 1. Travel without pre-approval via Concur, Pre-Auth form, or 1A (students).
 2. Booking bundled travel packages without itemized expenses.
 3. International travel not registered with International Center.
@@ -190,14 +189,50 @@ Example:
 6. Hospitality meals allowed but reduce per diem.
 7. Missing lodging receipt allowed with valid explanation (friend, airport, etc.).
 
+🏨 HOTEL VIOLATIONS:
+- Hotel night > $500 — Flag if no adequate justification is provided.
+- Hotel night > $333 — Flag if justification is vague or missing.
+- Unreasonable cost — Especially for student or international travel.
+- Missing itemization or comments — No breakdown or description in Concur report.
+- Duplicate charges — Same expense appears in multiple months.
+
+✈️ AIRFARE VIOLATIONS:
+- Flight cost > $1500 — With missing or weak justification.
+- Student airfare > $1500 — No detail on per-person or policy alignment.
+- Duplicate flights or credits — Same trip entered more than once or refunded.
+- Unjustified premium or international fares — If not explained in "Entry Comments".
+
+🚗 CAR RENTAL VIOLATIONS:
+- Daily rate > $36.04 — Per CP policy, without proper documentation.
+- Non-Enterprise vendor used — No justification for deviating from contracted vendor.
+- Rental total exceeds reasonable amount — Large charges not supported by trip duration.
+- Missing justification — No "Entry Comments" or backup for the above issues.
+
+🍽️ MEAL VIOLATIONS:
+- Domestic meal > $55 — Without reviewer/preparer comment.
+- Team/Group meal exceeds per-person limits:
+  - $30 for breakfast
+  - $60 for lunch
+  - $90 for dinner
+- No attendee count for group/team meal — Missing context to assess per-person costs.
+- Meal type not specified — Makes validation against policy impossible.
+- In-county purchases for team meals — Could indicate non-travel-related use.
+- Athletics-related hospitality > $30 per person — For athletes/staff, per local rules.
+- No "Entry Comment(s)" — For large or unusual hospitality expenses.
+
 \n\nAssistant:
 """
+
 
 
 def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
     """
     Processes a random sample of `group_count` employee-report groups.
     """
+
+    output_dir = os.path.dirname("audit_reports")
+    os.makedirs("audit_reports", exist_ok=True)
+
     groups = df_clean.groupby(['Employee ID', 'Report Key'])
     group_keys = list(groups.groups.keys())
     sampled_keys = random.sample(group_keys, min(group_count, len(group_keys)))
@@ -283,8 +318,6 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
     Saves the DataFrame to Excel with colors for Violation (red) and Exception (yellow).
     """
 
-    output_dir = os.path.dirname(output_path)
-    os.makedirs(output_dir, exist_ok=True)
 
     wb = Workbook()
     ws = wb.active
@@ -316,6 +349,9 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
     # Save the workbook
     wb.save(output_path)
     print(f"✅ Saved audited file to: {output_path}")
+
+
+
 
 
 xls = pd.ExcelFile("data/FY2024_Q2_Continous_Auditing_Procedures.xlsx")
