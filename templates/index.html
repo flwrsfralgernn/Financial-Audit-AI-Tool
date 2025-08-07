@@ -41,12 +41,36 @@
         </form>
       </div>
 
+      <!-- Incomplete Reports Upload Section -->
+      <div class="upload-card">
+        <h2>📋 Upload Incomplete Reports</h2>
+        {% if incomplete_uploaded %}
+          <div class="alert success">Successfully uploaded {{ uploaded_files|length }} file(s)</div>
+        {% endif %}
+        <form action="/upload_incomplete" method="post" enctype="multipart/form-data">
+          <div class="file-upload">
+            <input type="file" name="files" accept=".xlsx,.xls,.pdf,.doc,.docx" multiple required id="incomplete-input" />
+            <label for="incomplete-input" class="file-label">
+              <span class="upload-icon">📋</span>
+              <span id="incomplete-status">Drop incomplete reports here or click to browse</span>
+            </label>
+            <script>
+              document.getElementById('incomplete-input').addEventListener('change', function() {
+                const fileCount = this.files.length;
+                document.getElementById('incomplete-status').textContent = fileCount > 0 ? `${fileCount} file(s) selected` : 'Drop incomplete reports here or click to browse';
+              });
+            </script>
+          </div>
+          <button type="submit" class="btn-primary">📤 Upload Incomplete Reports</button>
+        </form>
+      </div>
+
       <!-- Description Section -->
       <div class="results-card">
         <div class="welcome">
           <div class="nav-logo large-logo"></div>
           <h2>Financial Data Audit Tool</h2>
-          <p>Upload your Excel file to get AI-powered data cleaning and compliance analysis</p>
+          <p>Upload your Excel files for AI-powered cleaning or submit incomplete reports for review</p>
           <div class="features">
             <div class="feature">
               <span>🔍</span>
@@ -59,6 +83,10 @@
             <div class="feature">
               <span>📊</span>
               <span>Generates audit reports</span>
+            </div>
+            <div class="feature">
+              <span>📋</span>
+              <span>Manages incomplete reports</span>
             </div>
           </div>
         </div>
