@@ -7,6 +7,17 @@ from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
 
+def load_excel_file(file_path):
+    xls = pd.ExcelFile(file_path)
+    df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+    return clean_data_sheet(df)
+
+def audit_and_flag(df_original, df_clean, bedrock_runtime):
+    violation_rows, exception_rows, _ = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
+    df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+    save_to_excel_with_formatting(df_flagged)
+    return df_flagged
+
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
     """
@@ -227,11 +238,10 @@ Example:
 def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     """
     Processes a random sample of `group_count` employee-report groups.
+    Returns only the audited rows flagged and saved to Excel.
     """
 
-
     os.makedirs("audit_reports", exist_ok=True)
-    output_dir = os.path.dirname("audit_reports")
 
     groups = df_clean.groupby(['Employee ID', 'Report Key'])
     group_keys = list(groups.groups.keys())
@@ -241,8 +251,12 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     all_violation_rows = []
     all_exception_rows = []
 
+    # Create empty DataFrame to collect only audited rows
+    audited_rows_df = pd.DataFrame()
+
     for employee_id, report_key in sampled_keys:
         df_emp = groups.get_group((employee_id, report_key))
+        audited_rows_df = pd.concat([audited_rows_df, df_emp], ignore_index=True)
 
         print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
 
@@ -263,17 +277,19 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
         all_violation_rows.extend(violation_rows)
         all_exception_rows.extend(exception_rows)
 
-        df_flagged = flag_audit_rows(df_clean.copy(), df_clean, all_violation_rows, all_exception_rows)
-        excel_path = os.path.join(output_dir, "Audited_Expenses.xlsx")
-        save_to_excel_with_formatting(df_flagged, excel_path)
-
         results.append({
             "employee_id": employee_id,
             "report_key": report_key,
             "response": full_response
         })
 
+    # Now flag and save only audited rows
+    df_flagged = flag_audit_rows(audited_rows_df.copy(), audited_rows_df, all_violation_rows, all_exception_rows)
+    excel_path = os.path.join("audit_reports", "Audited_Expenses.xlsx")
+    save_to_excel_with_formatting(df_flagged, excel_path)
+
     return all_violation_rows, all_exception_rows, results
+
 
 
 def extract_violation_exception_rows(response_text):
@@ -507,8 +523,7 @@ class AuditApp:
         if file_path:
             print("file path: " + file_path)
             try:
-                xls = pd.ExcelFile(file_path)
-                df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+                df = load_excel_file(file_path)
                 self.df_original, self.df_clean = clean_data_sheet(df)
                 self.excel_path = file_patch
                 self.generate_btn.config(state=tk.NORMAL)
@@ -518,8 +533,7 @@ class AuditApp:
 
     def generate_report(self):
         try:
-            violation_rows, exception_rows, _ = run_audit_for_multiple_employees(self.df_clean, self.bedrock_runtime)
-            df_flagged = flag_audit_rows(self.df_original, self.df_clean, violation_rows, exception_rows)
+            df_flagged = audit_and_flag(self.df_original, self.df_clean, self.bedrock_runtime)
 
             messagebox.showinfo("✅ Done")
         except Exception as e:
