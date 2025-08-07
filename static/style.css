@@ -1,0 +1,391 @@
+/* Cal Poly Colors */
+:root {
+  --cp-green: #1a472a;
+  --cp-gold: #c69214;
+  --cp-light-green: #2d5a3d;
+  --cp-white: #ffffff;
+  --cp-gray: #f5f5f5;
+  --shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, var(--cp-gray) 0%, #e8f5e8 100%);
+  min-height: 100vh;
+}
+
+/* Navigation */
+.navbar {
+  background: var(--cp-green);
+  color: var(--cp-white);
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-logo {
+  width: 100px;
+  height: 100px;
+  background-image: url('calpoly-logo.avif');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.large-logo {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 1.5rem;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+}
+
+.nav-brand h1 {
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+
+.status-indicator {
+  background: var(--cp-gold);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Dashboard */
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  grid-template-rows: auto 1fr;
+  gap: 2rem;
+  min-height: 70vh;
+}
+
+.table-section {
+  grid-column: 1 / -1;
+  margin-top: 1rem;
+}
+
+/* Cards */
+.upload-card, .results-card, .table-section {
+  background: var(--cp-white);
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  height: fit-content;
+}
+
+.upload-card {
+  border-top: 4px solid var(--cp-green);
+}
+
+.results-card {
+  border-top: 4px solid var(--cp-gold);
+}
+
+.table-section {
+  border-top: 4px solid var(--cp-light-green);
+}
+
+/* Upload Section */
+.upload-card {
+  position: relative;
+}
+
+.upload-card::before {
+  content: '';
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 80px;
+  height: 80px;
+  background-image: url('calpoly-logo.avif');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.3;
+}
+
+.upload-card h2 {
+  color: var(--cp-green);
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+}
+
+.file-upload {
+  margin-bottom: 1.5rem;
+}
+
+#file-input {
+  display: none;
+}
+
+.file-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 2rem;
+  background: var(--cp-gray);
+  border: 2px dashed var(--cp-green);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.file-label:hover {
+  background: #e8f5e8;
+  border-color: var(--cp-light-green);
+  transform: translateY(-2px);
+}
+
+.upload-icon {
+  font-size: 3rem;
+}
+
+/* Buttons */
+.btn-primary, .btn-success {
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--cp-green);
+  color: var(--cp-white);
+  font-size: 1.1rem;
+}
+
+.btn-primary:hover {
+  background: var(--cp-light-green);
+}
+
+.btn-success {
+  background: var(--cp-gold);
+  color: var(--cp-white);
+  margin-top: 1rem;
+}
+
+.btn-success:hover {
+  background: #b8820f;
+}
+
+/* Results Section */
+.results-card {
+  position: relative;
+}
+
+.results-card::before {
+  content: '';
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 80px;
+  height: 80px;
+  background-image: url('calpoly-logo.avif');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.3;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--cp-gray);
+}
+
+.results-header h2 {
+  color: var(--cp-green);
+  font-size: 1.3rem;
+}
+
+.stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.stat {
+  background: var(--cp-gray);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Table Preview */
+.table-container {
+  max-height: 600px;
+  overflow: auto;
+  border: 2px solid var(--cp-green);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  background: var(--cp-white);
+}
+
+.preview-label {
+  background: var(--cp-green);
+  color: var(--cp-white);
+  padding: 0.5rem 1rem;
+  margin: -2px -2px 1rem -2px;
+  border-radius: 10px 10px 0 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th {
+  background: var(--cp-light-green);
+  color: var(--cp-white);
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  font-size: 0.8rem;
+  border-bottom: 2px solid var(--cp-green);
+}
+
+.table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.8rem;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #f8f9fa;
+}
+
+.table tbody tr:hover {
+  background: #e8f5e8;
+}
+
+/* Flagged rows highlight */
+.table tbody tr.flagged {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+}
+
+.table tbody tr.flagged:hover {
+  background: #ffeaa7;
+}
+
+/* Welcome Screen */
+.welcome {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.welcome h2 {
+  color: var(--cp-green);
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.welcome p {
+  color: #666;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.features {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--cp-gray);
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid var(--cp-green);
+}
+
+.feature span:first-child {
+  font-size: 1.5rem;
+}
+
+/* Alerts */
+.alert {
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.alert.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .container {
+    padding: 1rem;
+  }
+  
+  .upload-card, .results-card {
+    padding: 1.5rem;
+  }
+  
+  .nav-brand h1 {
+    font-size: 1.2rem;
+  }
+  
+  .nav-logo {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .large-logo {
+    width: 160px;
+    height: 160px;
+  }
+}

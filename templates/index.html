@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cal Poly | Financial Audit Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="nav-logo"></div>
+      <h1>Cal Poly Financial Audit Dashboard</h1>
+    </div>
+    <div class="status-indicator">AI Ready</div>
+  </nav>
+
+  <div class="container">
+    <div class="dashboard">
+      <!-- Upload Section -->
+      <div class="upload-card">
+        <h2>📁 Upload Excel File</h2>
+        {% if error %}
+          <div class="alert error">{{ error }}</div>
+        {% endif %}
+        <form action="/clean_excel" method="post" enctype="multipart/form-data">
+          <div class="file-upload">
+            <input type="file" name="file" accept=".xlsx,.xls" required id="file-input" />
+            <label for="file-input" class="file-label">
+              <span class="upload-icon">📤</span>
+              <span>Drop Excel file here or click to browse</span>
+            </label>
+          </div>
+          <button type="submit" class="btn-primary">🤖 Process with AI</button>
+        </form>
+      </div>
+
+      <!-- Description Section -->
+      <div class="results-card">
+        <div class="welcome">
+          <div class="nav-logo large-logo"></div>
+          <h2>Financial Data Audit Tool</h2>
+          <p>Upload your Excel file to get AI-powered data cleaning and compliance analysis</p>
+          <div class="features">
+            <div class="feature">
+              <span>🔍</span>
+              <span>Detects compliance violations</span>
+            </div>
+            <div class="feature">
+              <span>🧹</span>
+              <span>Cleans and formats data</span>
+            </div>
+            <div class="feature">
+              <span>📊</span>
+              <span>Generates audit reports</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Preview Section (Full Width) -->
+    {% if table_html %}
+    <div class="table-section">
+      <div class="results-header">
+        <h2>📋 Cleaned Data Preview</h2>
+        <div class="stats">
+          <span class="stat">{{ row_count }} records</span>
+          <span class="stat">{{ flagged_count }} flagged</span>
+        </div>
+      </div>
+      <div class="table-container">
+        <div class="preview-label">📊 Data Preview (First 50 rows)</div>
+        {{ table_html | safe }}
+      </div>
+      <div class="actions">
+        <a href="/download_cleaned" class="btn-success">💾 Download Clean Excel</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
