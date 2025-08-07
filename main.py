@@ -225,13 +225,14 @@ Example:
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     """
     Processes a random sample of `group_count` employee-report groups.
     """
 
-    output_dir = os.path.dirname("audit_reports")
+
     os.makedirs("audit_reports", exist_ok=True)
+    output_dir = os.path.dirname("audit_reports")
 
     groups = df_clean.groupby(['Employee ID', 'Report Key'])
     group_keys = list(groups.groups.keys())
@@ -262,6 +263,10 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
 
         all_violation_rows.extend(violation_rows)
         all_exception_rows.extend(exception_rows)
+
+        df_flagged = flag_audit_rows(df_clean.copy(), df_clean, all_violation_rows, all_exception_rows)
+        excel_path = os.path.join(output_dir, "Audited_Expenses.xlsx")
+        save_to_excel_with_formatting(df_flagged, excel_path)
 
         results.append({
             "employee_id": employee_id,
@@ -438,11 +443,7 @@ class AuditApp:
             violation_rows, exception_rows, _ = run_audit_for_multiple_employees(self.df_clean, self.bedrock_runtime)
             df_flagged = flag_audit_rows(self.df_original, self.df_clean, violation_rows, exception_rows)
 
-            # Save result
-            output_path = os.path.join(os.path.dirname(self.excel_path), "Audited_Expenses.xlsx")
-            save_to_excel_with_formatting(df_flagged, output_path)
-
-            messagebox.showinfo("✅ Done", f"Audit complete! Saved to:\n{output_path}")
+            messagebox.showinfo("✅ Done")
         except Exception as e:
             messagebox.showerror("Error", f"Error during audit:\n{str(e)}")
 
