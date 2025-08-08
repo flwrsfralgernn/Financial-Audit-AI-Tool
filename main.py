@@ -4,18 +4,12 @@ import random
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
-from combine import combine
-from format import format
+from combine_and_format import combine_and_format
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import os
 import pandas as pd
 from boto3 import Session
-from main import (
-    clean_data_sheet,
-    run_audit_for_multiple_employees,
-    audit_and_flag,
-)
 from config import aws_access_key_id, aws_secret_access_key, aws_session_token
 
 
@@ -68,10 +62,9 @@ def audit_and_flag(df_original, df_clean, bedrock_runtime):
 
     audited_subset["Audit Flag"] = audited_subset["Original Row"].apply(get_flag)
 
-    save_to_excel_with_formatting(audited_subset, output_path="audit_reports/Audited_Expenses.xlsx")
+    save_to_excel_with_formatting(audited_subset)
 
     return audited_subset
-
 
 
 
@@ -110,16 +103,21 @@ def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
 
 def clean_data_sheet(df_raw):
     """
-    Cleans the 'DATA' sheet from FY2024_Q2_Continous_Auditing_Procedures.xlsx
+    Cleans data sheet - handles both master reports (headers at row 0) and original files (headers at row 7)
     """
-    # Set proper headers from row 7
-    df1 = df_raw[8:].copy()
-    df1.columns = df_raw.iloc[7]
+    # Check if this is a master report (headers already at row 0) or original file (headers at row 7)
+    if 'Employee ID' in df_raw.columns:
+        # Master report case - headers already at row 0
+        df1 = df_raw.copy()
+        df1["Original Row"] = df_raw.index + 2  # Excel is 1-based
+    else:
+        # Original file case - headers at row 7
+        df1 = df_raw[8:].copy()
+        df1.columns = df_raw.iloc[7]
+        df1["Original Row"] = df_raw.index[8:] + 2  # since Excel is 1-based and header is row 8
 
     # Drop columns that are entirely NaN
     df1 = df1.dropna(axis=1, how='all')
-
-    df1["Original Row"] = df_raw.index[8:] + 2  # since Excel is 1-based and header is row 8
 
     # Reset index
     df1 = df1.reset_index(drop=True)
@@ -292,12 +290,38 @@ Example:
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=2):
+def audit_single_employee(employee_id, report_key, df_emp, bedrock_runtime):
+    """Audit a single employee group - used for parallel processing"""
+    print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
+    
+    constant_fields, csv_data = format_employee_expenses_as_csv(df_emp)
+    prompt = create_audit_prompt(constant_fields, csv_data)
+    
+    full_response = invoke_claude_model(prompt, bedrock_runtime)
+    print("✅ Audit Result:\n", full_response)
+    
+    filename = f"Report Employee ID-{employee_id} Report Key-{report_key}.txt"
+    filepath = os.path.join("audit_reports", filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(full_response)
+    
+    violation_rows, exception_rows = extract_violation_exception_rows(full_response)
+    
+    return {
+        "employee_id": employee_id,
+        "report_key": report_key,
+        "response": full_response,
+        "violation_rows": violation_rows,
+        "exception_rows": exception_rows
+    }
+
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     """
-    Processes a random sample of `group_count` employee-report groups.
+    Processes a random sample of `group_count` employee-report groups using parallel processing.
     Returns only the audited rows flagged and saved to Excel.
     """
-
+    from concurrent.futures import ThreadPoolExecutor
+    
     os.makedirs("audit_reports", exist_ok=True)
 
     groups = df_clean.groupby(['Employee ID', 'Report Key'])
@@ -308,38 +332,24 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=2):
     all_violation_rows = []
     all_exception_rows = []
 
-    # Create empty DataFrame to collect only audited rows
-    audited_rows_df = pd.DataFrame()
-
-    for employee_id, report_key in sampled_keys:
-        df_emp = groups.get_group((employee_id, report_key))
-        audited_rows_df = pd.concat([audited_rows_df, df_emp], ignore_index=True)
-
-        print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
-
-        # Format data for prompt
-        constant_fields, csv_data = format_employee_expenses_as_csv(df_emp)
-        prompt = create_audit_prompt(constant_fields, csv_data)
-
-        full_response = invoke_claude_model(prompt, bedrock_runtime)
-        print("✅ Audit Result:\n", full_response)
-
-        filename = f"Report Employee ID-{employee_id} Report Key-{report_key}.txt"
-        filepath = os.path.join("audit_reports", filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(full_response)
-
-        violation_rows, exception_rows = extract_violation_exception_rows(full_response)
-
-        all_violation_rows.extend(violation_rows)
-        all_exception_rows.extend(exception_rows)
-
-        results.append({
-            "employee_id": employee_id,
-            "report_key": report_key,
-            "response": full_response
-        })
-
+    # Use ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        futures = []
+        for employee_id, report_key in sampled_keys:
+            df_emp = groups.get_group((employee_id, report_key))
+            future = executor.submit(audit_single_employee, employee_id, report_key, df_emp, bedrock_runtime)
+            futures.append(future)
+        
+        # Collect results
+        for future in futures:
+            result = future.result()
+            all_violation_rows.extend(result["violation_rows"])
+            all_exception_rows.extend(result["exception_rows"])
+            results.append({
+                "employee_id": result["employee_id"],
+                "report_key": result["report_key"],
+                "response": result["response"]
+            })
 
     return all_violation_rows, all_exception_rows, results
 
@@ -372,20 +382,6 @@ def extract_violation_exception_rows(response_text):
 def init_bedrock_runtime():
     """Initialize AWS Bedrock runtime client"""
     try:
-        # from config import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_REGION
-        
-        # # Check if credentials exist
-        # if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
-        #     print("AWS credentials not found in config.py")
-        #     return None
-            
-        # session = Session(
-        #     aws_access_key_id=AWS_ACCESS_KEY_ID,
-        #     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        #     aws_session_token=AWS_SESSION_TOKEN,
-        #     region_name=AWS_REGION
-        # )
-        
         # Test the credentials by creating client
         client = boto3.client('bedrock-runtime', region_name="us-west-2")
         return client
@@ -394,57 +390,6 @@ def init_bedrock_runtime():
         print(f"Failed to initialize AWS Bedrock: {e}")
         print("Please refresh your AWS credentials in config.py")
         return None
-
-
-def process_excel_file(file_buffer, is_master=True):
-    """
-    Main function to process uploaded Excel files following complete main.py workflow.
-    Uses create_audit_prompt and invoke_claude_model for AI analysis.
-    Returns DataFrame with only "Audit Flag" column added.
-    """
-    try:
-        # Step 1: Read Excel file
-        xls = pd.ExcelFile(file_buffer)
-        df_raw = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-        
-        # Step 2: Clean data using main.py method
-        df_original, df_clean = clean_data_sheet(df_raw)
-
-        # Step 3: Initialize Bedrock runtime
-        bedrock_runtime = init_bedrock_runtime()
-        
-        if bedrock_runtime:
-            try:
-                # Step 4: Run AI audit using main.py workflow
-                violation_rows, exception_rows, _ = run_audit_for_multiple_employees(
-                    df_clean, bedrock_runtime, group_count=3
-                )
-                
-                # Step 5: Flag audit rows - adds "Audit Flag" column only
-                df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
-                
-                return df_flagged
-                
-            except Exception as e:
-                print(f"AI audit failed: {e}")
-                # Return original data with empty audit flag
-                df_original['Audit Flag'] = ''
-                return df_original
-        else:
-            print("AWS credentials not available - returning cleaned data only")
-            # Return original data with empty audit flag
-            df_original['Audit Flag'] = ''
-            return df_original
-            
-    except Exception as e:
-        print(f"Error processing file: {str(e)}")
-        # Fallback: basic Excel read
-        try:
-            df_basic = pd.read_excel(file_buffer)
-            df_basic['Audit Flag'] = ''
-            return df_basic
-        except:
-            raise e
 
 
 def flag_audit_rows(df_original, df_clean, violation_rows, exception_rows):
@@ -464,11 +409,29 @@ def flag_audit_rows(df_original, df_clean, violation_rows, exception_rows):
     return df_original
 
 
-def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited_Expenses.xlsx"):
+def save_to_excel_with_formatting(df_flagged, output_path=None):
     """
     Saves the DataFrame to Excel with colors for Violation (red) and Exception (yellow).
     """
-
+    from openpyxl.utils import get_column_letter
+    from datetime import datetime
+    
+    # Generate timestamped filename if no path provided
+    if output_path is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"audit_reports/Audited_Expenses_{timestamp}.xlsx"
+    
+    # Define date columns for formatting
+    date_columns = [
+        "Travel Start Date", "Travel End Date", "First Submitted Date", "Last Submitted Date",
+        "Reports to Approval 2", "Budget Approval", "Approved Date / Sent for Payment Date",
+        "Transaction Date", "Processor Approval Date", "Sent for Payment Date", "Paid Date"
+    ]
+    
+    # Format date columns in DataFrame
+    for col in date_columns:
+        if col in df_flagged.columns:
+            df_flagged[col] = pd.to_datetime(df_flagged[col], errors='coerce').dt.date
 
     wb = Workbook()
     ws = wb.active
@@ -493,6 +456,13 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
         elif cell.value == "Exception":
             for c in row:
                 c.fill = yellow_fill
+    
+    # Apply date formatting to date columns
+    for idx, col in enumerate(df_flagged.columns, start=1):
+        if col in date_columns:
+            col_letter = get_column_letter(idx)
+            for cell in ws[col_letter][1:]:
+                cell.number_format = 'mm/dd/yy'
 
     # Freeze top row
     ws.freeze_panes = "A2"
@@ -508,13 +478,22 @@ class AuditApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Cal Poly Travel Expense Auditor")
-        self.root.geometry("500x350")
+        self.root.geometry("550x500")
         self.root.resizable(False, False)
 
         self.excel_path = None
         self.df_original = None
         self.df_clean = None
         self.bedrock_runtime = self.init_bedrock_runtime()
+        
+        # File paths for master report creation
+        self.master_files = {
+            'Expense Type Detail': None,
+            'EE Active': None, 
+            'CF Information': None,
+            'Processor Paid Summary': None,
+            'Risk International Travel': None
+        }
 
         self.create_widgets()
 
@@ -547,8 +526,22 @@ class AuditApp:
         self.status_label = ttk.Label(frame, text="", foreground="green")
         self.status_label.pack(pady=(10, 0))
 
-        self.combine_btn = ttk.Button(frame, text="🗂️ Combine Reports", command=self.combine_reports)
-        self.combine_btn.pack(pady=10, fill="x")
+        # Master report section
+        separator = ttk.Separator(frame, orient='horizontal')
+        separator.pack(fill='x', pady=10)
+        
+        master_label = ttk.Label(frame, text="📊 Create Master Report", font=('Segoe UI', 12, 'bold'))
+        master_label.pack(pady=(0, 10))
+        
+        self.upload_files_btn = ttk.Button(frame, text="📁 Select All 5 Files", command=self.upload_master_files)
+        self.upload_files_btn.pack(pady=5, fill="x")
+        
+        self.files_status_label = ttk.Label(frame, text="Files needed: All 5 files", foreground="orange")
+        self.files_status_label.pack(pady=5)
+        
+        self.create_master_btn = ttk.Button(frame, text="🔧 Create and Audit Master Report", command=self.create_master_report)
+        self.create_master_btn.pack(pady=5, fill="x")
+        self.create_master_btn.config(state=tk.DISABLED)
 
     def import_excel(self):
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
@@ -573,13 +566,70 @@ class AuditApp:
         except Exception as e:
             self.status_label.config(text=f"❌ Error during audit: {str(e)}", foreground="red")
 
-    def combine_reports(self):
+    def upload_master_files(self):
+        file_paths = filedialog.askopenfilenames(
+            title="Select all 5 required files",
+            filetypes=[("Excel files", "*.xlsx *.xls")]
+        )
+        
+        if file_paths:
+            self.classify_files(file_paths)
+        
+        self.update_files_status()
+    
+    def classify_files(self, file_paths):
+        file_keywords = {
+            'Expense Type Detail': ['expense type detail'],
+            'EE Active': ['ee active'],
+            'CF Information': ['cf information'],
+            'Processor Paid Summary': ['processor paid summary'],
+            'Risk International Travel': ['risk', 'International', 'Travel']
+        }
+        
+        for file_path in file_paths:
+            filename = os.path.basename(file_path).lower()
+            
+            for file_type, keywords in file_keywords.items():
+                if any(keyword in filename for keyword in keywords):
+                    self.master_files[file_type] = file_path
+                    break
+    
+    def update_files_status(self):
+        uploaded = [k for k, v in self.master_files.items() if v is not None]
+        missing = [k for k, v in self.master_files.items() if v is None]
+        
+        if len(uploaded) == 5:
+            self.files_status_label.config(text="✅ All 5 files uploaded", foreground="green")
+            self.create_master_btn.config(state=tk.NORMAL)
+        else:
+            missing_text = ", ".join(missing)
+            self.files_status_label.config(text=f"Missing: {missing_text}", foreground="orange")
+            self.create_master_btn.config(state=tk.DISABLED)
+    
+    def create_master_report(self):
         try:
-            combine()
-            format()
-            self.status_label.config(text="✅ Combined report created!", foreground="green")
+            self.status_label.config(text="🔧 Creating master report...", foreground="blue")
+            self.root.update()
+            
+            # Get the combined DataFrame directly
+            merged_df = combine_and_format(
+                expense_etd_path=self.master_files['Expense Type Detail'],
+                ee_active_path=self.master_files['EE Active'],
+                expense_cf_path=self.master_files['CF Information'],
+                expense_ppsa_path=self.master_files['Processor Paid Summary'],
+                request_rit_path=self.master_files['Risk International Travel']
+            )
+            
+            self.status_label.config(text="🔍 Master report created. Now auditing...", foreground="blue")
+            self.root.update()
+            
+            # Audit the DataFrame directly
+            df_original, df_clean = clean_data_sheet(merged_df)
+            df_flagged = audit_and_flag(df_original, df_clean, self.bedrock_runtime)
+            
+            self.status_label.config(text="✅ Master report created and audited in audit_reports folder!", foreground="green")
         except Exception as e:
-            self.status_label.config(text=f"❌ Combine failed: {e}", foreground="red")
+            self.status_label.config(text=f"❌ Master report failed: {e}", foreground="red")
 
 
 if __name__ == "__main__":
