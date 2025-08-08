@@ -2,49 +2,10 @@ import pandas as pd
 import boto3
 import json
 import random
+import os
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
-
-def load_excel_file(file_path):
-    xls = pd.ExcelFile(file_path)
-    df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-    return df
-
-def audit_and_flag(df_original, df_clean, bedrock_runtime):
-    # Run audit (only a subset of groups are selected inside this function)
-    violation_rows, exception_rows, audit_results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
-
-    # Combine all audited row numbers (violation + exception + others from audited groups)
-    audited_row_numbers = set(violation_rows + exception_rows)
-
-    # Add the rest of the rows from those groups that were checked (even if not flagged)
-    for r in audit_results:
-        group_rows = df_original[
-            (df_original['Employee ID'] == r['employee_id']) &
-            (df_original['Report Key'] == r['report_key'])
-        ]
-        audited_row_numbers.update(group_rows['Original Row'].tolist())
-
-    # Filter original DataFrame for only audited rows
-    audited_subset = df_original[df_original["Original Row"].isin(audited_row_numbers)].copy()
-
-    # Flag those rows
-    def get_flag(row_number):
-        if row_number in violation_rows:
-            return "Violation"
-        elif row_number in exception_rows:
-            return "Exception"
-        return ""
-
-    audited_subset["Audit Flag"] = audited_subset["Original Row"].apply(get_flag)
-
-    # Save the result
-    save_to_excel_with_formatting(audited_subset, output_path="audit_reports/Audited_Expenses_Short.xlsx")
-
-    return audited_subset
-
-
 
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
@@ -263,13 +224,14 @@ Example:
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
     """
     Processes a random sample of `group_count` employee-report groups.
-    Returns only the audited rows flagged and saved to Excel.
     """
 
+
     os.makedirs("audit_reports", exist_ok=True)
+    output_dir = os.path.dirname("audit_reports")
 
     groups = df_clean.groupby(['Employee ID', 'Report Key'])
     group_keys = list(groups.groups.keys())
@@ -279,12 +241,8 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
     all_violation_rows = []
     all_exception_rows = []
 
-    # Create empty DataFrame to collect only audited rows
-    audited_rows_df = pd.DataFrame()
-
     for employee_id, report_key in sampled_keys:
         df_emp = groups.get_group((employee_id, report_key))
-        audited_rows_df = pd.concat([audited_rows_df, df_emp], ignore_index=True)
 
         print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
 
@@ -305,19 +263,23 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
         all_violation_rows.extend(violation_rows)
         all_exception_rows.extend(exception_rows)
 
+        df_flagged = flag_audit_rows(df_clean.copy(), df_clean, all_violation_rows, all_exception_rows)
+        excel_path = os.path.join(output_dir, "Audited_Expenses.xlsx")
+        save_to_excel_with_formatting(df_flagged, excel_path)
+        
+        # Generate separate violation and exception reports
+        violations_path = os.path.join("audit_reports", "Violations_Report.xlsx")
+        exceptions_path = os.path.join("audit_reports", "Exceptions_Report.xlsx")
+        generate_violations_excel(df_flagged, violations_path)
+        generate_exceptions_excel(df_flagged, exceptions_path)
+
         results.append({
             "employee_id": employee_id,
             "report_key": report_key,
             "response": full_response
         })
 
-    # Now flag and save only audited rows
-    df_flagged = flag_audit_rows(audited_rows_df.copy(), audited_rows_df, all_violation_rows, all_exception_rows)
-    excel_path = os.path.join("audit_reports", "Audited_Expenses.xlsx")
-    save_to_excel_with_formatting(df_flagged, excel_path)
-
     return all_violation_rows, all_exception_rows, results
-
 
 
 def extract_violation_exception_rows(response_text):
@@ -477,6 +439,90 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
     print(f"✅ Saved audited file to: {output_path}")
 
 
+def generate_violations_excel(df_flagged, output_path="audit_reports/Violations_Report.xlsx"):
+    """
+    Generates Excel file containing only violation rows with all relevant information.
+    """
+    violations_df = df_flagged[df_flagged['Audit Flag'] == 'Violation'].copy()
+    
+    if violations_df.empty:
+        print("No violations found to export.")
+        return
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Violations"
+    
+    for r in dataframe_to_rows(violations_df, index=False, header=True):
+        ws.append(r)
+    
+    red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for cell in row:
+            cell.fill = red_fill
+    
+    ws.freeze_panes = "A2"
+    wb.save(output_path)
+    print(f"✅ Saved violations report to: {output_path}")
+
+
+def generate_exceptions_excel(df_flagged, output_path="audit_reports/Exceptions_Report.xlsx"):
+    """
+    Generates Excel file containing only exception rows with all relevant information.
+    """
+    exceptions_df = df_flagged[df_flagged['Audit Flag'] == 'Exception'].copy()
+    
+    if exceptions_df.empty:
+        print("No exceptions found to export.")
+        return
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Exceptions"
+    
+    for r in dataframe_to_rows(exceptions_df, index=False, header=True):
+        ws.append(r)
+    
+    yellow_fill = PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid")
+    
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for cell in row:
+            cell.fill = yellow_fill
+    
+    ws.freeze_panes = "A2"
+    wb.save(output_path)
+    print(f"✅ Saved exceptions report to: {output_path}")
+
+
+
+
+
+# xls = pd.ExcelFile("data/FY2024_Q2_Continous_Auditing_Procedures.xlsx")
+# print("📄 Sheets in the file:", xls.sheet_names)
+#
+# # Load a specific sheet (e.g., the first one)
+# df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+# df_original, df_clean = clean_data_sheet(df)
+#
+# groups = df_clean.groupby(['Employee ID', 'Report Key'])
+#
+# session = Session(
+#     aws_access_key_id=aws_access_key_id,
+#     aws_secret_access_key=aws_secret_access_key,
+#     aws_session_token=aws_session_token,
+#     region_name="us-west-2"
+# )
+#
+# bedrock_runtime = session.client("bedrock-runtime")
+#
+# violation_rows, exception_rows, results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
+# # Step 1: Flag the original DataFrame
+# df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
+#
+# # Step 2: Save to Excel
+# save_to_excel_with_formatting(df_flagged)
+
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import pandas as pd
@@ -523,7 +569,8 @@ class AuditApp:
         if file_path:
             print("file path: " + file_path)
             try:
-                df = load_excel_file(file_path)
+                xls = pd.ExcelFile(file_path)
+                df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
                 self.df_original, self.df_clean = clean_data_sheet(df)
                 self.excel_path = file_path
                 self.generate_btn.config(state=tk.NORMAL)
@@ -533,9 +580,14 @@ class AuditApp:
 
     def generate_report(self):
         try:
-            df_flagged = audit_and_flag(self.df_original, self.df_clean, self.bedrock_runtime)
+            violation_rows, exception_rows, _ = run_audit_for_multiple_employees(self.df_clean, self.bedrock_runtime)
+            df_flagged = flag_audit_rows(self.df_original, self.df_clean, violation_rows, exception_rows)
+            
+            # Generate separate violation and exception reports
+            generate_violations_excel(df_flagged)
+            generate_exceptions_excel(df_flagged)
 
-            messagebox.showinfo("✅ Done")
+            messagebox.showinfo("✅ Done", "Reports generated successfully!\n- Main audit report\n- Violations report\n- Exceptions report")
         except Exception as e:
             messagebox.showerror("Error", f"Error during audit:\n{str(e)}")
 
