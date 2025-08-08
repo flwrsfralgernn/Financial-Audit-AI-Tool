@@ -6,6 +6,17 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
 from combine import combine
 from format import format
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+import os
+import pandas as pd
+from boto3 import Session
+from main import (
+    clean_data_sheet,
+    run_audit_for_multiple_employees,
+    audit_and_flag,
+)
+from config import aws_access_key_id, aws_secret_access_key, aws_session_token
 
 
 def load_excel_file(file_path):
@@ -492,17 +503,6 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
 
 
 
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import os
-import pandas as pd
-from boto3 import Session
-from main import (
-    clean_data_sheet,
-    run_audit_for_multiple_employees,
-    audit_and_flag,
-)
-from config import aws_access_key_id, aws_secret_access_key, aws_session_token
 
 class AuditApp:
     def __init__(self, root):
