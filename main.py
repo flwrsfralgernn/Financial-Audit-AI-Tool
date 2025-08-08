@@ -1,10 +1,12 @@
-import pandas as pd
 import boto3
 import json
 import random
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
+from combine import combine
+from format import format
+
 
 def load_excel_file(file_path):
     xls = pd.ExcelFile(file_path)
@@ -12,24 +14,40 @@ def load_excel_file(file_path):
     return df
 
 def audit_and_flag(df_original, df_clean, bedrock_runtime):
-    # Run audit (only a subset of groups are selected inside this function)
+    # Run audit
     violation_rows, exception_rows, audit_results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
 
-    # Combine all audited row numbers (violation + exception + others from audited groups)
+    # Ensure column names are stripped of spaces
+    df_original.columns = df_original.columns.str.strip()
     audited_row_numbers = set(violation_rows + exception_rows)
 
-    # Add the rest of the rows from those groups that were checked (even if not flagged)
+    # Debug: print columns to check for header issues
+    required_columns = ['Employee ID', 'Report Key', 'Original Row']
+    for col in required_columns:
+        if col not in df_original.columns:
+            raise KeyError(f"❌ Required column '{col}' not found in df_original.\nAvailable columns: {df_original.columns.tolist()}")
+
+    # Add remaining rows from the groups that were checked
     for r in audit_results:
-        group_rows = df_original[
-            (df_original['Employee ID'] == r['employee_id']) &
-            (df_original['Report Key'] == r['report_key'])
-        ]
+        emp_id = r['employee_id']
+        report_key = r['report_key']
+
+        # Ensure matching types
+        mask = (
+            df_original['Employee ID'].astype(str) == str(emp_id)
+        ) & (
+            df_original['Report Key'].astype(str) == str(report_key)
+        )
+
+        group_rows = df_original[mask]
+        if group_rows.empty:
+            print(f" No matching rows found for Employee ID: {emp_id}, Report Key: {report_key}")
+
         audited_row_numbers.update(group_rows['Original Row'].tolist())
 
-    # Filter original DataFrame for only audited rows
+    # Filter and flag
     audited_subset = df_original[df_original["Original Row"].isin(audited_row_numbers)].copy()
 
-    # Flag those rows
     def get_flag(row_number):
         if row_number in violation_rows:
             return "Violation"
@@ -39,10 +57,10 @@ def audit_and_flag(df_original, df_clean, bedrock_runtime):
 
     audited_subset["Audit Flag"] = audited_subset["Original Row"].apply(get_flag)
 
-    # Save the result
-    save_to_excel_with_formatting(audited_subset, output_path="audit_reports/Audited_Expenses_Short.xlsx")
+    save_to_excel_with_formatting(audited_subset, output_path="audit_reports/Audited_Expenses.xlsx")
 
     return audited_subset
+
 
 
 
@@ -133,10 +151,10 @@ def clean_data_sheet(df_raw):
     ]
     df1 = df1[keep_columns]
 
-    return df_raw, df1
+    return df1.copy(), df1
 
 
-def format_employee_expenses_as_csv(employee_df, max_rows=50):
+def format_employee_expenses_as_csv(employee_df, max_rows=10000):
     """
     Converts an employee's expense records into a CSV-formatted string for LLM prompt.
     - Removes columns with same value in all rows.
@@ -263,7 +281,7 @@ Example:
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=2):
     """
     Processes a random sample of `group_count` employee-report groups.
     Returns only the audited rows flagged and saved to Excel.
@@ -311,10 +329,6 @@ def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
             "response": full_response
         })
 
-    # Now flag and save only audited rows
-    df_flagged = flag_audit_rows(audited_rows_df.copy(), audited_rows_df, all_violation_rows, all_exception_rows)
-    excel_path = os.path.join("audit_reports", "Audited_Expenses.xlsx")
-    save_to_excel_with_formatting(df_flagged, excel_path)
 
     return all_violation_rows, all_exception_rows, results
 
@@ -384,7 +398,7 @@ def process_excel_file(file_buffer, is_master=True):
         
         # Step 2: Clean data using main.py method
         df_original, df_clean = clean_data_sheet(df_raw)
-        
+
         # Step 3: Initialize Bedrock runtime
         bedrock_runtime = init_bedrock_runtime()
         
@@ -477,37 +491,32 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
     print(f"✅ Saved audited file to: {output_path}")
 
 
+
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
+import os
 import pandas as pd
 from boto3 import Session
-import os
-
 from main import (
     clean_data_sheet,
     run_audit_for_multiple_employees,
-    flag_audit_rows,
-    save_to_excel_with_formatting
+    audit_and_flag,
 )
 from config import aws_access_key_id, aws_secret_access_key, aws_session_token
-
 
 class AuditApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Cal Poly Travel Expense Auditor")
-        self.root.geometry("400x200")
+        self.root.geometry("500x350")
+        self.root.resizable(False, False)
 
         self.excel_path = None
         self.df_original = None
         self.df_clean = None
         self.bedrock_runtime = self.init_bedrock_runtime()
 
-        self.import_btn = tk.Button(root, text="📁 Import Excel File", command=self.import_excel, width=30)
-        self.import_btn.pack(pady=20)
-
-        self.generate_btn = tk.Button(root, text="🚀 Generate Reports", command=self.generate_report, state=tk.DISABLED, width=30)
-        self.generate_btn.pack(pady=10)
+        self.create_widgets()
 
     def init_bedrock_runtime(self):
         session = Session(
@@ -518,29 +527,64 @@ class AuditApp:
         )
         return session.client("bedrock-runtime")
 
+    def create_widgets(self):
+        frame = ttk.Frame(self.root, padding=20)
+        frame.pack(expand=True, fill="both")
+
+        self.title_label = ttk.Label(frame, text="🚀 Travel Audit Assistant", font=("Segoe UI", 16, "bold"))
+        self.title_label.pack(pady=(0, 10))
+
+        self.import_btn = ttk.Button(frame, text="📁 Import Excel File", command=self.import_excel)
+        self.import_btn.pack(pady=10, fill="x")
+
+        self.file_label = ttk.Label(frame, text="No file selected", foreground="gray")
+        self.file_label.pack(pady=(0, 10))
+
+        self.generate_btn = ttk.Button(frame, text="🧠 Run Audit and Save Report", command=self.generate_report)
+        self.generate_btn.pack(pady=10, fill="x")
+        self.generate_btn.config(state=tk.DISABLED)
+
+        self.status_label = ttk.Label(frame, text="", foreground="green")
+        self.status_label.pack(pady=(10, 0))
+
+        self.combine_btn = ttk.Button(frame, text="🗂️ Combine Reports", command=self.combine_reports)
+        self.combine_btn.pack(pady=10, fill="x")
+
     def import_excel(self):
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
         if file_path:
-            print("file path: " + file_path)
             try:
-                df = load_excel_file(file_path)
+                df = pd.read_excel(file_path)
                 self.df_original, self.df_clean = clean_data_sheet(df)
+                print("🧩 df_original.columns =", self.df_original.columns.tolist())
                 self.excel_path = file_path
+                self.file_label.config(text=os.path.basename(file_path), foreground="black")
                 self.generate_btn.config(state=tk.NORMAL)
-                messagebox.showinfo("Success", "Excel file imported successfully!")
+                self.status_label.config(text="✅ Excel file loaded successfully!", foreground="green")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to load Excel file:\n{str(e)}")
+                self.status_label.config(text=f"❌ Failed to load Excel: {e}", foreground="red")
 
     def generate_report(self):
         try:
+            self.status_label.config(text="🔍 Auditing in progress... Please wait.", foreground="blue")
+            self.root.update()
             df_flagged = audit_and_flag(self.df_original, self.df_clean, self.bedrock_runtime)
-
-            messagebox.showinfo("✅ Done")
+            self.status_label.config(text="✅ Audit complete. Report saved to audit_reports folder.", foreground="green")
         except Exception as e:
-            messagebox.showerror("Error", f"Error during audit:\n{str(e)}")
+            self.status_label.config(text=f"❌ Error during audit: {str(e)}", foreground="red")
+
+    def combine_reports(self):
+        try:
+            combine()
+            format()
+            self.status_label.config(text="✅ Combined report created!", foreground="green")
+        except Exception as e:
+            self.status_label.config(text=f"❌ Combine failed: {e}", foreground="red")
 
 
 if __name__ == "__main__":
     root = tk.Tk()
+    style = ttk.Style(root)
+    style.theme_use("clam")
     app = AuditApp(root)
     root.mainloop()
