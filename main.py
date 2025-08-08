@@ -63,6 +63,7 @@ def audit_and_flag(df_original, df_clean, bedrock_runtime):
     audited_subset["Audit Flag"] = audited_subset["Original Row"].apply(get_flag)
 
     save_to_excel_with_formatting(audited_subset)
+    create_violations_exceptions_report(audited_subset, audit_results)
 
     return audited_subset
 
@@ -409,6 +410,56 @@ def flag_audit_rows(df_original, df_clean, violation_rows, exception_rows):
     return df_original
 
 
+def create_violations_exceptions_report(df_flagged, audit_results):
+    """
+    Creates separate violations and exceptions reports as two files.
+    """
+    from datetime import datetime
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Filter violations and exceptions
+    violations_df = df_flagged[df_flagged['Audit Flag'] == 'Violation'].copy()
+    exceptions_df = df_flagged[df_flagged['Audit Flag'] == 'Exception'].copy()
+    print(f"Found {len(violations_df)} violations and {len(exceptions_df)} exceptions")
+    
+    # Create Violations file
+    if not violations_df.empty:
+        violations_path = f"audit_reports/Violations_Report_{timestamp}.xlsx"
+        wb_violations = Workbook()
+        ws_violations = wb_violations.active
+        ws_violations.title = "Violations"
+        
+        for r in dataframe_to_rows(violations_df, index=False, header=True):
+            ws_violations.append(r)
+        
+        red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+        for row in ws_violations.iter_rows(min_row=2, max_row=ws_violations.max_row):
+            for cell in row:
+                cell.fill = red_fill
+        
+        wb_violations.save(violations_path)
+        print(f"✅ Saved violations report to: {violations_path}")
+    
+    # Create Exceptions file
+    if not exceptions_df.empty:
+        exceptions_path = f"audit_reports/Exceptions_Report_{timestamp}.xlsx"
+        wb_exceptions = Workbook()
+        ws_exceptions = wb_exceptions.active
+        ws_exceptions.title = "Exceptions"
+        
+        for r in dataframe_to_rows(exceptions_df, index=False, header=True):
+            ws_exceptions.append(r)
+        
+        yellow_fill = PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid")
+        for row in ws_exceptions.iter_rows(min_row=2, max_row=ws_exceptions.max_row):
+            for cell in row:
+                cell.fill = yellow_fill
+        
+        wb_exceptions.save(exceptions_path)
+        print(f"✅ Saved exceptions report to: {exceptions_path}")
+
+
 def save_to_excel_with_formatting(df_flagged, output_path=None):
     """
     Saves the DataFrame to Excel with colors for Violation (red) and Exception (yellow).
@@ -510,7 +561,7 @@ class AuditApp:
         frame = ttk.Frame(self.root, padding=20)
         frame.pack(expand=True, fill="both")
 
-        self.title_label = ttk.Label(frame, text="🚀 Travel Audit Assistant", font=("Segoe UI", 16, "bold"))
+        self.title_label = ttk.Label(frame, text="Travel Audit Assistant", font=("Segoe UI", 16, "bold"))
         self.title_label.pack(pady=(0, 10))
 
         self.import_btn = ttk.Button(frame, text="📁 Import Excel File", command=self.import_excel)
@@ -519,7 +570,7 @@ class AuditApp:
         self.file_label = ttk.Label(frame, text="No file selected", foreground="gray")
         self.file_label.pack(pady=(0, 10))
 
-        self.generate_btn = ttk.Button(frame, text="🧠 Run Audit and Save Report", command=self.generate_report)
+        self.generate_btn = ttk.Button(frame, text="Audit Report", command=self.generate_report)
         self.generate_btn.pack(pady=10, fill="x")
         self.generate_btn.config(state=tk.DISABLED)
 
@@ -530,16 +581,16 @@ class AuditApp:
         separator = ttk.Separator(frame, orient='horizontal')
         separator.pack(fill='x', pady=10)
         
-        master_label = ttk.Label(frame, text="📊 Create Master Report", font=('Segoe UI', 12, 'bold'))
+        master_label = ttk.Label(frame, text="📊 Create Report", font=('Segoe UI', 12, 'bold'))
         master_label.pack(pady=(0, 10))
         
-        self.upload_files_btn = ttk.Button(frame, text="📁 Select All 5 Files", command=self.upload_master_files)
+        self.upload_files_btn = ttk.Button(frame, text="📁 Select All Files", command=self.upload_master_files)
         self.upload_files_btn.pack(pady=5, fill="x")
         
         self.files_status_label = ttk.Label(frame, text="Files needed: All 5 files", foreground="orange")
         self.files_status_label.pack(pady=5)
         
-        self.create_master_btn = ttk.Button(frame, text="🔧 Create and Audit Master Report", command=self.create_master_report)
+        self.create_master_btn = ttk.Button(frame, text="Create and Audit Report", command=self.create_master_report)
         self.create_master_btn.pack(pady=5, fill="x")
         self.create_master_btn.config(state=tk.DISABLED)
 

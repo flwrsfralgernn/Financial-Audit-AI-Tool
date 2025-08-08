@@ -15,7 +15,7 @@ def load_excel_file_task(file_info):
     return name, df
 
 def combine_and_format(expense_etd_path=None, ee_active_path=None, expense_cf_path=None, expense_ppsa_path=None, request_rit_path=None):
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ProcessPoolExecutor
     
     # Define file loading tasks
     file_tasks = [
@@ -26,9 +26,9 @@ def combine_and_format(expense_etd_path=None, ee_active_path=None, expense_cf_pa
         (request_rit_path or "./data/CombineAndFormatData/Request - Risk International Travel with Header Comments (1).xlsx", "Request - Risk International_1", 7, ["Request ID", "Authorized Date", "Destination City/Location", "Destination Country"], "request_rit")
     ]
     
-    # Load all files in parallel
+    # Load all files in parallel using processes
     dataframes = {}
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ProcessPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(load_excel_file_task, task) for task in file_tasks]
         for future in futures:
             name, df = future.result()

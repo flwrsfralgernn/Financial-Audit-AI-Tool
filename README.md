@@ -44,3 +44,4 @@ This project is an AI-powered system designed to automate and improve Cal Polyâ€
 - Ashton Liu  
 - Wenfan Wei  
 - Isabela Fernandez
+-Ellie Romero
