@@ -13,10 +13,39 @@ def load_excel_file(file_path):
     return df
 
 def audit_and_flag(df_original, df_clean, bedrock_runtime):
-    violation_rows, exception_rows, _ = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
-    df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
-    save_to_excel_with_formatting(df_flagged)
-    return df_flagged
+    # Run audit (only a subset of groups are selected inside this function)
+    violation_rows, exception_rows, audit_results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
+
+    # Combine all audited row numbers (violation + exception + others from audited groups)
+    audited_row_numbers = set(violation_rows + exception_rows)
+
+    # Add the rest of the rows from those groups that were checked (even if not flagged)
+    for r in audit_results:
+        group_rows = df_original[
+            (df_original['Employee ID'] == r['employee_id']) &
+            (df_original['Report Key'] == r['report_key'])
+        ]
+        audited_row_numbers.update(group_rows['Original Row'].tolist())
+
+    # Filter original DataFrame for only audited rows
+    audited_subset = df_original[df_original["Original Row"].isin(audited_row_numbers)].copy()
+
+    # Flag those rows
+    def get_flag(row_number):
+        if row_number in violation_rows:
+            return "Violation"
+        elif row_number in exception_rows:
+            return "Exception"
+        return ""
+
+    audited_subset["Audit Flag"] = audited_subset["Original Row"].apply(get_flag)
+
+    # Save the result
+    save_to_excel_with_formatting(audited_subset, output_path="audit_reports/Audited_Expenses_Short.xlsx")
+
+    return audited_subset
+
+
 
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
@@ -448,34 +477,6 @@ def save_to_excel_with_formatting(df_flagged, output_path="audit_reports/Audited
     wb.save(output_path)
     print(f"✅ Saved audited file to: {output_path}")
 
-
-
-
-
-# xls = pd.ExcelFile("data/FY2024_Q2_Continous_Auditing_Procedures.xlsx")
-# print("📄 Sheets in the file:", xls.sheet_names)
-#
-# # Load a specific sheet (e.g., the first one)
-# df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-# df_original, df_clean = clean_data_sheet(df)
-#
-# groups = df_clean.groupby(['Employee ID', 'Report Key'])
-#
-# session = Session(
-#     aws_access_key_id=aws_access_key_id,
-#     aws_secret_access_key=aws_secret_access_key,
-#     aws_session_token=aws_session_token,
-#     region_name="us-west-2"
-# )
-#
-# bedrock_runtime = session.client("bedrock-runtime")
-#
-# violation_rows, exception_rows, results = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
-# # Step 1: Flag the original DataFrame
-# df_flagged = flag_audit_rows(df_original, df_clean, violation_rows, exception_rows)
-#
-# # Step 2: Save to Excel
-# save_to_excel_with_formatting(df_flagged)
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
