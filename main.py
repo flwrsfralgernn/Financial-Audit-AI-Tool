@@ -10,7 +10,7 @@ from openpyxl import Workbook
 def load_excel_file(file_path):
     xls = pd.ExcelFile(file_path)
     df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-    return clean_data_sheet(df)
+    return df
 
 def audit_and_flag(df_original, df_clean, bedrock_runtime):
     violation_rows, exception_rows, _ = run_audit_for_multiple_employees(df_clean, bedrock_runtime)
@@ -525,7 +525,7 @@ class AuditApp:
             try:
                 df = load_excel_file(file_path)
                 self.df_original, self.df_clean = clean_data_sheet(df)
-                self.excel_path = file_patch
+                self.excel_path = file_path
                 self.generate_btn.config(state=tk.NORMAL)
                 messagebox.showinfo("Success", "Excel file imported successfully!")
             except Exception as e:
