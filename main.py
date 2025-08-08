@@ -2,7 +2,6 @@ import pandas as pd
 import boto3
 import json
 import random
-import os
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl import Workbook
@@ -264,7 +263,7 @@ Example:
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=10):
     """
     Processes a random sample of `group_count` employee-report groups.
     Returns only the audited rows flagged and saved to Excel.
