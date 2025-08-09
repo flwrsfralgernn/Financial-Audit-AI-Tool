@@ -106,7 +106,7 @@ Select your Concur Excel file (or combine multiple), click **Run Audit**, and ch
 ## 🧩 How the audit works
 1. Load & clean data
 2. Group by employee/report
-3. Apply rule-based checks from `config/policies/policy.txt`
+3. Apply rule-based checks from `config/policies/policy_rules.txt`
 4. **Randomly select 3 groups** (demo mode)
 5. Send selected groups to Bedrock model grounded by your policy PDF in the Knowledge Base
 6. Merge returned row flags into dataset
