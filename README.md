@@ -105,14 +105,14 @@ Select your Concur Excel file (or combine multiple), click **Run Audit**, and ch
 ## 🧩 How the audit works
 1. Load & clean data
 2. Group by employee/report
-3. Apply rule-based checks from `config/policies/policy.txt`
+3. Apply rule-based checks from `config/policies/policy_rules.txt`
 4. **Randomly select 3 groups** (demo mode)
-5. Send selected groups to an LLM for detailed analysis based on your policy text
+5. Send selected groups to anthropic.claude-3-sonnet-20240229-v1:0 for detailed analysis based on your policy text
 6. Merge returned row flags into dataset
 7. Output Excel, text reports, and charts
 
 ## 📝 Editing the policy
-- **Local rules:** Edit `config/policies/policy.txt`
+- **Local rules:** Edit `config/policies/policy_rules.txt`
 - This text is also sent to the LLM to guide compliance checking.
 
 ## ▶️ Usage
