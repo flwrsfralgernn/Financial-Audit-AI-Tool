@@ -1,42 +1,105 @@
-# Cal Poly Travel Expense Audit AI Tool
+# Financial Audit AI Tool
 
-This project is an AI-powered system designed to automate and improve Cal Poly’s travel expense audit process. It reviews employee travel data exported from Concur and uses a large language model (Claude 3 Sonnet via Amazon Bedrock) to identify policy violations and exceptions based on CSU and Cal Poly travel rules.
+An AI-powered desktop application that audits travel expense reports for **policy compliance** using **Amazon Bedrock** and a customizable travel policy file.  
+Designed during the **CSU Summer AI Camp 2025** to help organizations automatically detect policy **violations** and **exceptions** in expense data.
 
-## 🚀 Main Features
+---
 
-- Upload raw Concur Excel reports
-- Clean and format data automatically
-- Group expenses by employee and report
-- Send expense data to Claude AI for review
-- Detect violations and exceptions
-- Generate color-coded Excel reports:
-  - 🔴 Red = Violation
-  - 🟡 Yellow = Exception
-- Simple user interface (built with Tkinter)
+## 📌 Features
 
-## 🛠️ Technologies Used
+- **Excel Upload & Audit** – Import Concur or other expense spreadsheets and run a compliance check.  
+- **Policy-Aware Analysis** – Uses rules from a customizable `policy.txt` file in `config/policies/`.  
+- **Random Sample Auditing** – For demonstration purposes, the app audits **3 random employee/report groups** per run.  
+- **Detailed AI Explanations** – Each audited group produces a `.txt` report with clear reasoning.  
+- **Flagged Excel Output** – Generates an Excel file with:
+  - Red highlighting for violations  
+  - Yellow highlighting for exceptions  
+- **Separate Reports** – Creates separate **Violations** and **Exceptions** workbooks.  
+- **Management Visuals** – Generates summary charts:
+  - Total violations by category  
+  - Trends over time  
+  - Top 10 repeat offenders  
+- **Tkinter UI** – Simple, no-code interface for running audits.
 
-- Python
-- Amazon Bedrock (Claude 3 Sonnet)
-- Pandas
-- OpenPyXL
-- Tkinter
-- Boto3
+---
 
-## ⚙️ How It Works
+## 🗂 Folder Structure
 
-1. You import the raw Excel file.
-2. The program cleans and prepares the data.
-3. It selects a few employee reports at random.
-4. Each group is sent to Claude AI with a custom prompt.
-5. Claude returns a list of flagged entries with reasons.
-6. The result is saved as an Excel file in the `audit_reports` folder.
+financial-audit-ai-tool/
+├─ app/ # Tkinter UI
+│ ├─ main.py # Entry point – run this to start the app
+│ ├─ controllers.py
+│ ├─ widgets.py
+│ └─ threads.py
+├─ services/ # Core logic and helpers
+│ ├─ io_loader.py
+│ ├─ grouper.py
+│ ├─ prompt_builder.py
+│ ├─ bedrock_client.py
+│ ├─ policy_parser.py
+│ ├─ auditor.py
+│ ├─ report_writer.py
+│ ├─ summary_stats.py
+│ └─ charts.py
+├─ config/
+│ ├─ settings.py
+│ └─ policies/
+│ └─ policy.txt # Editable travel policy rules
+├─ audit_reports/ # Generated Excel, text reports, and charts
+├─ tests/
+├─ requirements.txt
+└─ README.md
 
-## 📦 Setup
 
-1. Install the required Python packages:
-2. Set up your AWS Bedrock access credentials in `config.py`
-3. Run the app:
+---
+
+## ⚙️ Installation
+
+### 1. Create a virtual environment (optional but recommended)
+```bash
+python -m venv venv
+source venv/bin/activate   # Mac/Linux
+venv\Scripts\activate      # Windows
+
+## 2. (Optional) Create a Virtual Environment
+
+```bash
+python -m venv venv
+
+# Mac/Linux
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
+
+## 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+
+| Step | Action               | Description                                     |
+| ---- | -------------------- | ----------------------------------------------- |
+| 1️⃣  | **Select Your File** | Choose your **Concur Excel** file when prompted |
+| 2️⃣  | **Start the Audit**  | Click **`Run Audit`** in the UI                 |
+| 3️⃣  | **Processing**       | AI checks data and generates reports            |
+
+| Feature                     | Description                                          |
+| --------------------------- | ---------------------------------------------------- |
+| 🎯 **Random Selection**     | Picks **3 employee/report groups** for demonstration |
+| 🤖 **AI Compliance Checks** | Detects violations & exceptions                      |
+| 📂 **Report Generation**    | Saves multiple reports in `audit_reports/`           |
+| 📊 **Charts**               | Creates visual summary charts in `summary_charts/`   |
+
+flowchart TD
+    A[Select Concur Excel File] --> B[Click "Run Audit"]
+    B --> C[Randomly Pick 3 Employee/Report Groups]
+    C --> D[Run AI Compliance Checks]
+    D --> E[Generate XLSX & TXT Reports]
+    D --> F[Create Summary Charts]
+    E --> G[Save in audit_reports/]
+    F --> H[Save in summary_charts/]
+
+
 
 ## 👨‍💻 Team Members
 
