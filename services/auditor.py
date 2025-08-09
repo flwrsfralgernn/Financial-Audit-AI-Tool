@@ -1,9 +1,11 @@
 import json
 import random
 import os
+from typing import Optional
 from services.prompt_builder import *
-from pathlib import Path
 from config.settings import REPORTS_DIR
+from services.policy_loader import load_policy_text
+from config.settings import DEFAULT_POLICY_FILE  # optiona
 
 def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
     """
@@ -37,36 +39,61 @@ def invoke_claude_model(prompt: str, bedrock_runtime) -> str:
     return full_response
 
 
-def extract_violation_exception_rows(response_text):
+import re
+
+def extract_violation_exception_rows(text: str):
     """
-    Extracts violation and exception row numbers from the end of the Claude response.
-    Assumes the format is always the same and the last two lines contain the info.
+    Robustly parse violation/exception row numbers from the full response.
+    1) Try strict footer lines (with ':' or '-').
+    2) Fallback: scan 'Violations:' / 'Exceptions:' sections for 'Row <num>' patterns.
+    Returns (violations:list[int], exceptions:list[int]).
     """
-    lines = response_text.strip().splitlines()[-5:]  # look at last few lines
-    violation_line = next((line for line in lines if "Violation Rows:" in line), "")
-    exception_line = next((line for line in lines if "Exception Rows:" in line), "")
 
-    violation_content = violation_line.replace("👉", "").replace("Violation Rows:", "").strip()
-    exception_content = exception_line.replace("👉", "").replace("Exception Rows:", "").strip()
+    def parse_footer(label):
+        # Accept "Violation Rows:" or "Violation Rows -", any case/spacing, emoji optional
+        pat = rf"{label}\s*rows\s*[:\-]\s*([^\n\r]+)"
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if not m:
+            return []
+        s = m.group(1).strip()
+        if s.lower() == "none":
+            return []
+        return [int(x) for x in re.findall(r"\d+", s)]
 
-    violation_rows = []
-    exception_rows = []
+    # 1) Footer attempt
+    viol = parse_footer("violation")
+    exce = parse_footer("exception")
+    if viol or exce:
+        return viol, exce
 
-    if violation_content.lower() != "none":
-        violation_rows = [int(x.strip()) for x in violation_content.split(",") if x.strip().isdigit()]
+    # 2) Section fallback: collect numbers after "Row " tokens under headings
+    def rows_from_section(section_title):
+        # Find the section start
+        m = re.search(rf"{section_title}\s*:", text, flags=re.IGNORECASE)
+        if not m:
+            return []
+        start = m.end()
+        # Take the next ~1200 chars (enough for a few bullets)
+        chunk = text[start:start+1200]
+        # Extract all "Row 123" and also plain numbers in comma lists
+        nums = set(int(n) for n in re.findall(r"\bRow\s+(\d+)\b", chunk, flags=re.IGNORECASE))
+        # plus numbers in lists like "Row 1, 2, 3" or "1, 2, 3" right under the section
+        nums.update(int(n) for n in re.findall(r"\b(\d{1,7})\b", chunk) if len(n) <= 7)
+        return sorted(nums)
 
-    if exception_content.lower() != "none":
-        exception_rows = [int(x.strip()) for x in exception_content.split(",") if x.strip().isdigit()]
+    viol2 = rows_from_section("Violations")
+    exce2 = rows_from_section("Exceptions")
+    return viol2, exce2
 
-    return violation_rows, exception_rows
 
 
-def audit_single_employee(employee_id, report_key, df_emp, bedrock_runtime):
+def audit_single_employee(employee_id, report_key, df_emp, bedrock_runtime, policy_path: Optional[str] = None):
     """Audit a single employee group - used for parallel processing"""
     print(f"\n🔍 Auditing Employee: {employee_id}, Report Key: {report_key}")
 
     constant_fields, csv_data = format_employee_expenses_as_csv(df_emp)
-    prompt = create_audit_prompt(constant_fields, csv_data)
+    policy_text = load_policy_text(policy_path or str(DEFAULT_POLICY_FILE))
+    prompt = create_audit_prompt(constant_fields, csv_data, policy_text=policy_text)
 
     full_response = invoke_claude_model(prompt, bedrock_runtime)
     print("✅ Audit Result received")
