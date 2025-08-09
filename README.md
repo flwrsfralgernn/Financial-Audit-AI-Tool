@@ -77,3 +77,12 @@ venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 
+
+
+## 👨‍💻 Team Members
+
+- Davit Hakobyan  
+- Ashton Liu  
+- Wenfan Wei  
+- Isabela Fernandez
+-Ellie Romero
