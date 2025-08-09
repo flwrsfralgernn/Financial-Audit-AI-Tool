@@ -77,28 +77,6 @@ venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 
-| Step | Action               | Description                                     |
-| ---- | -------------------- | ----------------------------------------------- |
-| 1️⃣  | **Select Your File** | Choose your **Concur Excel** file when prompted |
-| 2️⃣  | **Start the Audit**  | Click **`Run Audit`** in the UI                 |
-| 3️⃣  | **Processing**       | AI checks data and generates reports            |
-
-| Feature                     | Description                                          |
-| --------------------------- | ---------------------------------------------------- |
-| 🎯 **Random Selection**     | Picks **3 employee/report groups** for demonstration |
-| 🤖 **AI Compliance Checks** | Detects violations & exceptions                      |
-| 📂 **Report Generation**    | Saves multiple reports in `audit_reports/`           |
-| 📊 **Charts**               | Creates visual summary charts in `summary_charts/`   |
-
-flowchart TD
-    A[Select Concur Excel File] --> B[Click "Run Audit"]
-    B --> C[Randomly Pick 3 Employee/Report Groups]
-    C --> D[Run AI Compliance Checks]
-    D --> E[Generate XLSX & TXT Reports]
-    D --> F[Create Summary Charts]
-    E --> G[Save in audit_reports/]
-    F --> H[Save in summary_charts/]
-
 
 
 ## 👨‍💻 Team Members
