@@ -1,0 +1,7 @@
+boto3
+botocore
+openpyxl
+pandas
+tkintertable
+python-dotenv
+matplotlib
