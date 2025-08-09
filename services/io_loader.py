@@ -28,7 +28,7 @@ def clean_data_sheet(df_raw):
     df1 = df1.reset_index(drop=True)
     # Normalize column names
     # df.columns = [str(col).strip().lower().replace(' ', '_').replace('\n', '_') for col in df.columns]
-
+    df1.columns = [str(c).strip().replace("\n", " ").replace("  ", " ") for c in df1.columns]
     keep_columns = [
         "Original Row",
         "Employee ID",
@@ -51,7 +51,7 @@ def clean_data_sheet(df_raw):
         "Payment Type",
         "Vendor",
         "Vendor State/Province/Region",
-        "Transportation Type ",
+        "Transportation Type",
         "Is Personal Expense?",
         "Personal Car Mileage From Location",
         "Personal Car Mileage To Location",

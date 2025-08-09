@@ -1,5 +1,4 @@
 # services/report_writer.py
-from pathlib import Path
 from datetime import datetime
 from typing import Optional, Union, Dict
 import pandas as pd
@@ -7,6 +6,10 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image as XLImage
+from pathlib import Path
+from services.summary_stats import compute_summary
+from services.charts import render_summary_charts
 from config.settings import REPORTS_DIR
 
 
@@ -161,7 +164,7 @@ def audit_and_flag(
     """
     # Import here to avoid circular imports
     from services.auditor import run_audit_for_multiple_employees
-
+    from services.report_writer import embed_images_in_workbook
     # Run audit via Bedrock (sampled groups inside the function)
     violation_rows, exception_rows, audit_results = run_audit_for_multiple_employees(
         df_clean, bedrock_runtime
@@ -193,12 +196,41 @@ def audit_and_flag(
     audited_subset = df_o[df_o["Original Row"].isin(audited_row_numbers)].copy()
     audited_subset = flag_audit_rows(audited_subset, df_clean, violation_rows, exception_rows)
 
-    # Write files and return paths
     audited_path = save_to_excel_with_formatting(audited_subset)
-    split_paths = create_violations_exceptions_report(audited_subset, audit_results)
 
-    return audited_subset, {
-        "audited_excel": audited_path,
-        "violations": split_paths.get("violations"),
-        "exceptions": split_paths.get("exceptions"),
-    }
+    # ===== Management Visuals =====
+
+
+    summary = compute_summary(df_original=df_original, df_flagged=audited_subset)
+    chart_dir = REPORTS_DIR / "summary_charts"
+    chart_dir.mkdir(parents=True, exist_ok=True)
+    chart_paths = render_summary_charts(summary, out_dir=str(chart_dir))
+
+    # Optional: Embed charts into Excel
+
+    embed_images_in_workbook(audited_path, chart_paths)
+
+    create_violations_exceptions_report(audited_subset, audit_results)
+
+    return audited_subset
+
+def embed_images_in_workbook(xlsx_path: str, image_paths: list, sheet_name: str = "Summary", start_cell: str = "A1"):
+    """
+    Inserts PNGs into a new sheet. One below another.
+    """
+    from openpyxl import load_workbook
+    wb = load_workbook(xlsx_path)
+    ws = wb.create_sheet(sheet_name)
+    row = int(''.join(filter(str.isdigit, start_cell)) or 1)
+    col = ''.join(filter(str.isalpha, start_cell)) or "A"
+
+    for p in image_paths:
+        if not p:
+            continue
+        img = XLImage(p)
+        ws.add_image(img, f"{col}{row}")
+        # bump ~25 rows between images (depends on chart size)
+        row += 25
+
+    wb.save(xlsx_path)
+    return xlsx_path
