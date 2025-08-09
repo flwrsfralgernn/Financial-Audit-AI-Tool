@@ -2,8 +2,10 @@ from combine_and_format import combine_and_format
 import tkinter as tk
 from tkinter import filedialog, ttk
 from boto3 import Session
-from config import aws_access_key_id, aws_secret_access_key, aws_session_token
-from main import *
+from config.config import aws_access_key_id, aws_secret_access_key, aws_session_token
+from services.report_writer import *
+from services.auditor import *
+from services.io_loader import *
 
 
 class AuditApp:
@@ -165,9 +167,3 @@ class AuditApp:
             self.status_label.config(text=f"❌ Master report failed: {e}", foreground="red")
 
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    style = ttk.Style(root)
-    style.theme_use("clam")
-    app = AuditApp(root)
-    root.mainloop()
