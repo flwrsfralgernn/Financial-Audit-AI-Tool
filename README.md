@@ -85,4 +85,4 @@ pip install -r requirements.txt
 - Ashton Liu  
 - Wenfan Wei  
 - Isabela Fernandez
--Ellie Romero
+- Ellie Romero
