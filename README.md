@@ -79,7 +79,7 @@ pip install -r requirements.txt
 
 
 
-## 👨‍💻 Team Members
+# 👨‍💻 Team Members
 
 - Davit Hakobyan  
 - Ashton Liu  
