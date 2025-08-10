@@ -117,7 +117,7 @@ def audit_single_employee(employee_id, report_key, df_emp, bedrock_runtime, poli
 
 
 
-def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=3):
+def run_audit_for_multiple_employees(df_clean, bedrock_runtime, group_count=7):
     """
     Processes a random sample of `group_count` employee-report groups using parallel processing.
     Returns only the audited rows flagged and saved to Excel.
