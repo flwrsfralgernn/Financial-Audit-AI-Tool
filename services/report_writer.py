@@ -203,7 +203,6 @@ def audit_and_flag(
 
     summary = compute_summary(df_original=df_original, df_flagged=audited_subset)
     chart_dir = REPORTS_DIR / "summary_charts"
-    chart_dir.mkdir(parents=True, exist_ok=True)
     chart_paths = render_summary_charts(summary, out_dir=str(chart_dir))
 
     # Optional: Embed charts into Excel
