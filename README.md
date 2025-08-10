@@ -2,7 +2,7 @@
 
 AI-powered auditor for corporate travel & expense data. This desktop app ingests Concur-style Excel exports, applies policy rules (including your own), runs them through a Large Language Model (LLM) for nuanced checks, and produces clean reports and charts.
 
-> **Note:** For illustration/demo purposes, the tool currently audits only **7 randomly selected employee/report groups** from the dataset. You can modify this in the code to process all groups.
+> **Note:** For illustration/demo purposes, the tool currently audits only **5 randomly selected employee/report groups** from the dataset. You can modify this in the code to process all groups.
 
 ## ✨ What it does
 - **Import** one or many Concur Excel files (XLS/XLSX).
@@ -106,7 +106,7 @@ Select your Concur Excel file (or combine multiple), click **Run Audit**, and ch
 1. Load & clean data
 2. Group by employee/report
 3. Apply rule-based checks from `config/policies/policy_rules.txt`
-4. **Randomly select 7 groups** (demo mode)
+4. **Randomly select 5 groups** (demo mode)
 5. Send selected groups to anthropic.claude-3-sonnet-20240229-v1:0 for detailed analysis based on your policy text
 6. Merge returned row flags into dataset
 7. Output Excel, text reports, and charts

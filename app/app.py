@@ -12,7 +12,7 @@ class AuditApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Cal Poly Travel Expense Auditor")
-        self.root.geometry("550x500")
+        self.root.geometry("700x600")
         self.root.resizable(False, False)
 
         self.excel_path = None

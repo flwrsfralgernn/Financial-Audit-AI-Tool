@@ -1,7 +1,5 @@
 # services/summary_stats.py
-from collections import Counter, defaultdict
-from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import List
 import pandas as pd
 
 DEFAULT_COLS = {

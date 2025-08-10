@@ -7,7 +7,6 @@ from services.report_writer import flag_audit_rows, save_to_excel_with_formattin
 # from services.charts import render_summary_charts
 
 def quick_audit_pipeline(excel_path: str, group_count: int = 3):
-    os.makedirs("audit_reports", exist_ok=True)
 
     # Load + clean
     df_raw = load_excel_file(excel_path)
